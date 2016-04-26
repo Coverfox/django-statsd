@@ -2,7 +2,7 @@ import collections
 from django import http
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_POST
 
 from django_statsd.clients import statsd
 
@@ -78,9 +78,9 @@ def _process_summaries(start, keys):
         statsd.timing('window.performance.calculated.%s' % k, max(v, 0))
 
 
-@require_http_methods(['GET', 'HEAD'])
+@require_POST
 def _process_boomerang(request):
-    if 'nt_nav_st' not in request.GET:
+    if 'nt_nav_st' not in request.POST:
         raise ValueError(
             'nt_nav_st not in request.GET, make sure boomerang'
             ' is made with navigation API timings as per the following'
@@ -88,11 +88,11 @@ def _process_boomerang(request):
 
     # This when the request started, everything else will be relative to this
     # for the purposes of statsd measurement.
-    start = int(request.GET['nt_nav_st'])
+    start = int(request.POST['nt_nav_st'])
 
     keys = {}
     for k in getattr(settings, 'STATSD_RECORD_KEYS', stick_keys):
-        v = request.GET.get(boomerang[k])
+        v = request.POST.get(boomerang[k])
         if not v or v == 'undefined':
             continue
         if k in boomerang:
@@ -105,7 +105,7 @@ def _process_boomerang(request):
         pass
 
 
-@require_http_methods(['POST'])
+@require_POST
 def _process_stick(request):
     start = request.POST.get('window.performance.timing.navigationStart', None)
     if not start:
@@ -135,7 +135,7 @@ clients = {
 
 
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_POST
 def record(request):
     """
     This is a Django method you can link to in your URLs that process

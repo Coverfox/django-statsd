@@ -1,13 +1,8 @@
-import socket
+import threading
 
-try:
-    from importlib import import_module
-except ImportError:
-    from django.utils.importlib import import_module
-
+from importlib import import_module
+from django.utils.functional import SimpleLazyObject
 from django.conf import settings
-
-_statsd = None
 
 
 def get(name, default):
@@ -18,17 +13,19 @@ def get(name, default):
 
 
 def get_client():
-    client = get('STATSD_CLIENT', 'statsd.client')
-    host = get('STATSD_HOST', 'localhost')
-# This is causing problems with statsd
-# gaierror ([Errno -9] Address family for hostname not supported)
-# TODO: figure out what to do here.
-#    host = socket.gethostbyaddr(host)[2][0]
-    port = get('STATSD_PORT', 8125)
-    prefix = get('STATSD_PREFIX', None)
-    return import_module(client).StatsClient(host=host, port=port, prefix=prefix)
+    local = threading.local()
+    if not getattr(local, 'statsd_client', None):
+        client = get('STATSD_CLIENT', 'statsd.client')
+        host = get('STATSD_HOST', 'localhost')
+        # This is causing problems with statsd
+        # gaierror ([Errno -9] Address family for hostname not supported)
+        # TODO: figure out what to do here.
+        # host = socket.gethostbyaddr(host)[2][0]
+        port = get('STATSD_PORT', 8125)
+        prefix = get('STATSD_PREFIX', None)
+        local.statsd_client = import_module(client).StatsClient(
+            host=host, port=port, prefix=prefix
+        )
+    return local.statsd_client
 
-if not _statsd:
-    _statsd = get_client()
-
-statsd = _statsd
+statsd = SimpleLazyObject(get_client)
