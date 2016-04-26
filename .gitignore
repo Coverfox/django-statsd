@@ -2,3 +2,5 @@
 build
 dist
 mydatabase
+.idea
+.venv

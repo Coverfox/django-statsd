@@ -1,5 +1,3 @@
-
-
 from django_statsd.clients import statsd
 import time
 

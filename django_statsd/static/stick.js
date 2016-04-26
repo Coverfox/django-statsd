@@ -27,6 +27,3 @@ exports.send = function(url) {
 };
 
 })(typeof exports === 'undefined' ? (this.stick = {}) : exports);
-
-
-

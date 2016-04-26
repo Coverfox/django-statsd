@@ -17,8 +17,7 @@ from django.core.urlresolvers import reverse
 from django.http import HttpResponse, HttpResponseForbidden
 from django.test import TestCase
 from django.test.client import RequestFactory
-from django.utils import dictconfig
-from django.utils import unittest
+from django.utils.log import configure_logging
 
 import mock
 from nose.tools import eq_
@@ -45,6 +44,11 @@ cfg = {
         },
     },
 }
+
+if VERSION < (1, 9, 0):
+    dj_backend_utils = 'django.db.backends.util'
+else:
+    dj_backend_utils = 'django.db.backends.utils'
 
 
 @mock.patch.object(middleware.statsd, 'incr')
@@ -80,7 +84,7 @@ class TestIncr(TestCase):
 
 
 @mock.patch.object(middleware.statsd, 'timing')
-class TestTiming(unittest.TestCase):
+class TestTiming(TestCase):
 
     def setUp(self):
         self.req = RequestFactory().get('/')
@@ -138,7 +142,7 @@ class TestTiming(unittest.TestCase):
             eq_(expected, args[0])
 
 
-class TestClient(unittest.TestCase):
+class TestClient(TestCase):
 
     @mock.patch.object(settings, 'STATSD_CLIENT', 'statsd.client')
     def test_normal(self):
@@ -320,37 +324,37 @@ class TestRecord(TestCase):
                       'window.performance.navigation.type': 1}
 
     def test_no_client(self):
-        assert self.client.get(self.url).status_code == 400
+        assert self.client.post(self.url).status_code == 400
 
     def test_no_valid_client(self):
-        assert self.client.get(self.url, {'client': 'no'}).status_code == 400
+        assert self.client.post(self.url, {'client': 'no'}).status_code == 400
 
     def test_boomerang_almost(self):
-        assert self.client.get(self.url,
-                               {'client': 'boomerang'}).status_code == 400
+        assert self.client.post(self.url,
+                                {'client': 'boomerang'}).status_code == 400
 
     def test_boomerang_minimum(self):
-        content = self.client.get(self.url,
+        content = self.client.post(self.url,
                                   {'client': 'boomerang',
                                    'nt_nav_st': 1}).content.decode()
         assert(content == 'recorded')
 
     @mock.patch('django_statsd.views.process_key')
     def test_boomerang_something(self, process_key):
-        content = self.client.get(self.url, self.good).content.decode()
+        content = self.client.post(self.url, self.good).content.decode()
         assert content == 'recorded'
         assert process_key.called
 
-    def test_boomerang_post(self):
-        assert self.client.post(self.url, self.good).status_code == 405
+    def test_boomerang_get(self):
+        assert self.client.get(self.url, self.good).status_code == 405
 
     def test_good_guard(self):
         settings.STATSD_RECORD_GUARD = lambda r: None
-        assert self.client.get(self.url, self.good).status_code == 200
+        assert self.client.post(self.url, self.good).status_code == 200
 
     def test_bad_guard(self):
         settings.STATSD_RECORD_GUARD = lambda r: HttpResponseForbidden()
-        assert self.client.get(self.url, self.good).status_code == 403
+        assert self.client.post(self.url, self.good).status_code == 403
 
     def test_stick_get(self):
         assert self.client.get(self.url, self.stick).status_code == 405
@@ -392,7 +396,7 @@ class TestRecord(TestCase):
 class TestErrorLog(TestCase):
 
     def setUp(self):
-        dictconfig.dictConfig(cfg)
+        configure_logging(settings.LOGGING_CONFIG, cfg)
         self.log = logging.getLogger('test.logging')
 
     def division_error(self):
@@ -567,7 +571,7 @@ class TestCursorWrapperPatching(TestCase):
     @mock.patch('django_statsd.patches.db.patched_callproc')
     @mock.patch('django_statsd.patches.db.patched_executemany')
     @mock.patch('django_statsd.patches.db.patched_execute')
-    @mock.patch('django.db.backends.util.CursorWrapper')
+    @mock.patch('{}.CursorWrapper'.format(dj_backend_utils))
     @skipUnless(VERSION >= (1, 6, 0), "CursorWrapper Patching for Django>=1.6")
     def test_cursorwrapper_patching16(self,
                                       CursorWrapper,
