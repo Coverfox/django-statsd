@@ -1,14 +1,10 @@
-from django.conf import settings
 from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
 from django_statsd.clients import statsd
 
-from .celery import register_celery_events
 
-
-if getattr(settings, 'STATSD_CELERY_SIGNALS', False):
-    register_celery_events()
-
-
+@receiver(post_save)
 def model_save(sender, **kwargs):
     """
     Handle ``save`` events of all Django models.
@@ -23,6 +19,7 @@ def model_save(sender, **kwargs):
     ))
 
 
+@receiver(post_delete)
 def model_delete(sender, **kwargs):
     """
     Handle ``delete`` events of all Django models.
@@ -34,7 +31,3 @@ def model_delete(sender, **kwargs):
         instance._meta.app_label,
         instance._meta.object_name,
     ))
-
-if getattr(settings, 'STATSD_MODEL_SIGNALS', False):
-    post_save.connect(model_save)
-    post_delete.connect(model_delete)
